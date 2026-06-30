@@ -1,0 +1,54 @@
+name: worker workflow
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel_name:
+        description: "YouTube channel name"
+        required: true
+        default: "Jagdeeshwari Didi"
+        type: string
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        shard: [0, 1, 2, 3]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Setup yt-dlp with EJS Node support
+        uses: AnimMouse/setup-yt-dlp@v3
+      
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Pull latest changes
+        run: git pull --rebase origin main
+      
+      - name: Create cookies file
+        run: |
+          echo "${{ secrets.YT_COOKIES }}" > cookies.txt
+          chmod 600 cookies.txt
+          
+      - name: Run worker with per-video commits
+        env: 
+          ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}          
+        run: python worker.py ${{ matrix.shard }} 4 "${{ github.event.inputs.channel_name }}"
